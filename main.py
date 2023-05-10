@@ -1,12 +1,18 @@
+#%%
 import os
 import gradio as gr
 import requests
 import openai
 from openai.embeddings_utils import get_embedding, cosine_similarity
+import elevenlabs
 import config
 
 openai.api_key = config.OPENAI_API_KEY
-companies = ", ".join(config.COMPANIES)
+elevenlabs.set_api_key(config.ELEVEN_LABS_API_KEY)
+VOICES_DICT = {voice.name: voice.voice_id for voice in elevenlabs.voices()}
+
+#%%
+companies = ", ".join(config.ADVISOR_COMPANIES)
 custom_prompt = config.ADVISOR_CUSTOM_PROMPT
 
 template = (
@@ -58,20 +64,31 @@ def transcribe(audio):
     messages.append(system_message)
 
     # text to speech request with eleven labs
+    CHUNK_SIZE = 1024
     url = f"https://api.elevenlabs.io/v1/text-to-speech/{config.ADVISOR_VOICE_ID}/stream"
-    data = {
-        "text": system_message["content"].replace('"', ''),
-        "voice_settings": {
-            "stability": 0.1,
-            "similarity_boost": 0.8
-        }
+
+    headers = {
+        "Accept": "audio/mpeg",
+        "Content-Type": "application/json",
+        "xi-api-key": config.ELEVEN_LABS_API_KEY
     }
 
-    r = requests.post(url, headers={'xi-api-key': config.ELEVEN_LABS_API_KEY}, json=data)
+    data = {
+        "text": system_message["content"].replace('"', ''),
+        "model_id": "eleven_monolingual_v1",
+        "voice_settings": config.ADVISOR_VOICE_SETTINGS
+    }
+
+    # r = requests.post(url, headers=headers, json=data)
+    response = requests.post(url, json=data, headers=headers, stream=True)
 
     output_filename = "reply.mp3"
-    with open(output_filename, "wb") as output:
-        output.write(r.content)
+    # with open(output_filename, "wb") as output:
+    #     output.write(r.content)
+    with open(output_filename, 'wb') as f:
+        for chunk in response.iter_content(chunk_size=CHUNK_SIZE):
+            if chunk:
+                f.write(chunk)
 
     chat_transcript = ""
     for message in messages:
@@ -89,7 +106,10 @@ theme = gr.themes.Default().set(
 
 with gr.Blocks(theme=theme) as ui:
     # advisor image input and microphone input
-    advisor = gr.Image(value=config.ADVISOR_IMAGE).style(width=config.ADVISOR_IMAGE_WIDTH, height=config.ADVISOR_IMAGE_HEIGHT)
+    advisor = gr.Image(value=config.ADVISOR_IMAGE).style(
+        width=config.ADVISOR_IMAGE_WIDTH,
+        height=config.ADVISOR_IMAGE_HEIGHT
+    )
     audio_input = gr.Audio(source="microphone", type="filepath")
 
     # text transcript output and audio 

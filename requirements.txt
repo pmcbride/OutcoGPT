@@ -3,4 +3,4 @@ gradio
 requests
 elevenlabs
 
-# python-dotenv
+python-dotenv
