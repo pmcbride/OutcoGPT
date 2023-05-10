@@ -1,0 +1,6 @@
+openai
+gradio
+requests
+elevenlabs
+
+# python-dotenv
