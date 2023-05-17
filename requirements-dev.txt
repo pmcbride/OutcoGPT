@@ -1,0 +1,17 @@
+openai
+gradio
+requests
+elevenlabs
+plotly
+python-dotenv
+
+SpeechRecognition
+pyaudio
+openai-whisper
+
+
+
+# Notebook
+jupyter
+ipykernel
+ipywidgets
