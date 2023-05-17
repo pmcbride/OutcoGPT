@@ -2,7 +2,7 @@ import os
 # from dotenv import load_dotenv
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-ELEVEN_API_KEY = os.getenv("ELEVENLABS_API_KEY")
+ELEVEN_API_KEY = os.getenv("ELEVEN_API_KEY")
 
 ELEVEN_VOICES_DICT = {
     "Rachel": "21m00Tcm4TlvDq8ikWAM",
