@@ -306,4 +306,4 @@ with gr.Blocks(theme=theme) as demo:
 
 # if __name__ == "__main__":
 demo.queue()
-demo.launch(debug=True, share=True, server_name="0.0.0.0")
+demo.launch(debug=False, share=False, server_name="0.0.0.0")
