@@ -11,6 +11,7 @@ scikit-learn
 SpeechRecognition
 pyaudio
 mpv
+soundfile
 
 # Notebook
 jupyter
