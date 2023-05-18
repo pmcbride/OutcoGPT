@@ -12,6 +12,7 @@ from typing import List, Iterator
 import speech_recognition as sr
 import time
 import sys
+import io
 
 import whisper
 WHISPER_MODEL = whisper.load_model("base")
@@ -296,6 +297,10 @@ with gr.Blocks(theme=theme) as demo:
     # btn = gr.Button("Run")
     # btn.click(user, [audio_state, chatbot], [audio_state, chatbot]).then(
     #     chat, chatbot, chatbot)#[chatbot, audio_output])
+    clear = gr.Button("Clear")
+    clear.click(lambda: [None, code_default, ""], None, [chatbot, code_box, code_output], queue=False)
+    run_code_btn.click(run_code, code_box, code_output)
+    submit_code_btn.click(run_tests, code_box, code_output)
 
 # if __name__ == "__main__":
 demo.queue()
