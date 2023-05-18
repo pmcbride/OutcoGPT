@@ -181,12 +181,14 @@ with gr.Blocks(theme=theme, css=css) as demo:
     # Create a play button to run tts for the last chatbot message
     play_btn = gr.Button("Play")
     play_btn.click(tts, chatbot, gr.Audio())
-    
+
     state = gr.State(value="")
     audio.stream(fn=transcribe, inputs=[audio, state], outputs=[msg, state], queue=False)#.then(
         # user, [msg, chatbot], [msg, chatbot])
-    msg.submit(user, [msg, chatbot], [msg, chatbot], queue=False).then(bot, chatbot, chatbot)#.then(tts, chatbot, gr.Audio())
-    submit_msg.click(user, [msg, chatbot], [msg, chatbot], queue=False).then(bot, chatbot, chatbot)#.then(tts, chatbot, gr.Audio())
+    msg.submit(user, [msg, chatbot], [msg, chatbot], queue=False).then(
+        bot, chatbot, chatbot)#.then(tts, chatbot, gr.Audio())
+    submit_msg.click(user, [msg, chatbot], [msg, chatbot], queue=False).then(
+        bot, chatbot, chatbot)  # .then(tts, chatbot, gr.Audio())
     # chatbot.change(tts, chatbot, gr.Audio())
     clear = gr.Button("Clear")
     clear.click(lambda: [None, code_default, ""], None, [chatbot, code_box, code_output], queue=False)

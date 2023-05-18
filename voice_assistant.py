@@ -1,3 +1,4 @@
+#%% Imports
 from langchain import OpenAI, ConversationChain, LLMChain, PromptTemplate
 from langchain.memory import ConversationBufferWindowMemory
 
@@ -51,8 +52,18 @@ ELEVEN_VOICES_DICT = {
 
 ELEVEN_VOICE = "Steve"
 ELEVEN_VOICE_ID = ELEVEN_VOICES_DICT[ELEVEN_VOICE]
+def tts(text, voice=ELEVEN_VOICE, stream=False):
+    audio = generate(
+        text=text,
+        voice=voice,
+        model='eleven_monolingual_v1',
+        stream=stream,
+    )
+    play(audio)
+    return audio
 
 def listen():
+    import speech_recognition as sr
     r = sr.Recognizer()
     with sr.Microphone() as source:
         print('Calibrating...')
@@ -88,3 +99,6 @@ def listen():
             play(audio)
             # engine.say(response_text)
             # engine.runAndWait()
+# %%
+if __name__ == "__main__":
+    listen()
