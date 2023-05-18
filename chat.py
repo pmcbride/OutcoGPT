@@ -9,14 +9,16 @@ from elevenlabs import generate, play, save, stream
 import elevenlabs as el
 import subprocess
 from typing import List, Iterator
-import speech_recognition as sr
+# import speech_recognition as sr
 import time
 import sys
 import io
 
-import whisper
-WHISPER_MODEL = whisper.load_model("base")
-
+# try:
+#     import whisper
+#     WHISPER_MODEL = whisper.load_model("base")
+# except:
+#     pass
 
 import config
 from config import (
@@ -96,20 +98,20 @@ def transcribe(audio, state="", timeout=5):
     state += text + " "
     return state, state
 
-def transcribe2(audio, state="", timeout=5, model=WHISPER_MODEL):
-    time.sleep(timeout)
-    # create a recognizer
-    audio = whisper.load_audio(audio)
-    audio = whisper.pad_or_trim(audio)
-    mel = whisper.log_mel_spectrogram(audio).to(model.device)
-    options = whisper.DecodingOptions(language= 'en', fp16=False)
+# def transcribe2(audio, state="", timeout=5, model=WHISPER_MODEL):
+#     time.sleep(timeout)
+#     # create a recognizer
+#     audio = whisper.load_audio(audio)
+#     audio = whisper.pad_or_trim(audio)
+#     mel = whisper.log_mel_spectrogram(audio).to(model.device)
+#     options = whisper.DecodingOptions(language= 'en', fp16=False)
 
-    result = whisper.decode(model, mel, options)
-    text = result.text
-    if result.no_speech_prob < 0.5:
-        print(result.text)
-        state += text + " "
-    return state, state
+#     result = whisper.decode(model, mel, options)
+#     text = result.text
+#     if result.no_speech_prob < 0.5:
+#         print(result.text)
+#         state += text + " "
+#     return state, state
 
 def user(user_message, history):
     return "", history + [[user_message, None]]
@@ -166,30 +168,30 @@ def bot(history):
         # time.sleep(0.05)
         yield history
 
-def listen():
-    import speech_recognition as sr
-    r = sr.Recognizer()
-    with sr.Microphone() as source:
-        print('Calibrating...')
-        r.adjust_for_ambient_noise(source, duration=5)
-        # optional parameters to adjust microphone sensitivity
-        # r.energy_threshold = 200
-        # r.pause_threshold=0.5    
+# def listen():
+#     import speech_recognition as sr
+#     r = sr.Recognizer()
+#     with sr.Microphone() as source:
+#         print('Calibrating...')
+#         r.adjust_for_ambient_noise(source, duration=5)
+#         # optional parameters to adjust microphone sensitivity
+#         # r.energy_threshold = 200
+#         # r.pause_threshold=0.5    
         
-        print('Okay, go!')
-        text = ''
-        print('listening now...')
-        try:
-            audio = r.listen(source, timeout=5, phrase_time_limit=30)
-            print('Recognizing...')
-            # whisper model options are found here: https://github.com/openai/whisper#available-models-and-languages
-            # other speech recognition models are also available.
-            text = r.recognize_whisper(audio, model='medium.en', show_dict=True, )['text']
-        except Exception as e:
-            unrecognized_speech_text = f'Sorry, I didn\'t catch that. Exception was: {e}s'
-            text = unrecognized_speech_text
-        print(text)
-    return text
+#         print('Okay, go!')
+#         text = ''
+#         print('listening now...')
+#         try:
+#             audio = r.listen(source, timeout=5, phrase_time_limit=30)
+#             print('Recognizing...')
+#             # whisper model options are found here: https://github.com/openai/whisper#available-models-and-languages
+#             # other speech recognition models are also available.
+#             text = r.recognize_whisper(audio, model='medium.en', show_dict=True, )['text']
+#         except Exception as e:
+#             unrecognized_speech_text = f'Sorry, I didn\'t catch that. Exception was: {e}s'
+#             text = unrecognized_speech_text
+#         print(text)
+#     return text
 #%%
 fn_tests = config.EXAMPLE_TESTS
 fn_soln = config.EXAMPLE_SOLUTION
@@ -284,10 +286,10 @@ with gr.Blocks(theme=theme) as demo:
     #     user, [audio_state, chatbot], [audio_state, chatbot]).then(
     #     chat, chatbot, chatbot).then(
     #         tts, chatbot)
-    audio.stream(transcribe, [audio], [audio_text, audio_state])#.then(
-        # user, [audio_state, chatbot], [audio_state, chatbot]).then(
-        # chat, chatbot, chatbot).then(
-        #     tts, chatbot)
+    audio.stream(transcribe, [audio], [audio_text, audio_state]).then(
+        user, [audio_text, chatbot], [audio_text, chatbot]).then(
+        chat, chatbot, chatbot).then(
+            tts, chatbot)
     audio_text.submit(user, [audio_text, chatbot], [audio_text, chatbot]).then(
         chat, chatbot, chatbot).then(
             tts, chatbot)
