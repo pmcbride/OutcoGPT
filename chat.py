@@ -127,9 +127,9 @@ def tts(history, voice=INTERVIEWER_VOICE):
         text=text,
         voice=voice,
         model='eleven_monolingual_v1',
-        stream=True,
+        stream=False,
     )
-    stream(audio)
+    play(audio)
     return True
     
 def chat(history: List[List[str]]):
@@ -286,10 +286,10 @@ with gr.Blocks(theme=theme) as demo:
     #     user, [audio_state, chatbot], [audio_state, chatbot]).then(
     #     chat, chatbot, chatbot).then(
     #         tts, chatbot)
-    audio.stream(transcribe, [audio], [audio_text, audio_state]).then(
-        user, [audio_text, chatbot], [audio_text, chatbot]).then(
-        chat, chatbot, chatbot).then(
-            tts, chatbot)
+    audio.stream(transcribe, [audio], [audio_text, audio_state])#.then(
+        # user, [audio_text, chatbot], [audio_text, chatbot]).then(
+        # chat, chatbot, chatbot).then(
+        #     tts, chatbot)
     audio_text.submit(user, [audio_text, chatbot], [audio_text, chatbot]).then(
         chat, chatbot, chatbot).then(
             tts, chatbot)
