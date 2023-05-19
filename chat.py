@@ -14,11 +14,6 @@ import time
 import sys
 import io
 
-# try:
-#     import whisper
-#     WHISPER_MODEL = whisper.load_model("base")
-# except:
-#     pass
 
 import config
 from config import (
@@ -98,40 +93,130 @@ def transcribe(audio, state="", timeout=5):
     state += text + " "
     return state, state
 
-# def transcribe2(audio, state="", timeout=5, model=WHISPER_MODEL):
-#     time.sleep(timeout)
-#     # create a recognizer
-#     audio = whisper.load_audio(audio)
-#     audio = whisper.pad_or_trim(audio)
-#     mel = whisper.log_mel_spectrogram(audio).to(model.device)
-#     options = whisper.DecodingOptions(language= 'en', fp16=False)
+import whisper
+WHISPER_MODEL = whisper.load_model("base")
+def transcribe2(audio, state="", timeout=5, model=WHISPER_MODEL):
+    # time.sleep(timeout)
+    # create a recognizer
+    audio = whisper.load_audio(audio)
+    audio = whisper.pad_or_trim(audio)
+    mel = whisper.log_mel_spectrogram(audio).to(model.device)
+    options = whisper.DecodingOptions(language= 'en', fp16=False)
 
-#     result = whisper.decode(model, mel, options)
-#     text = result.text
-#     if result.no_speech_prob < 0.5:
-#         print(result.text)
-#         state += text + " "
-#     return state, state
+    result = whisper.decode(model, mel, options)
+    text = result.text
+    if result.no_speech_prob < 0.5:
+        print(f"Text: {result.text}")
+        state += text + " "
+        print(f"State: {state}")
+    return state, state
 
-def user(user_message, history):
-    return "", history + [[user_message, None]]
+def user(user_message, code_box, history):
+    if user_message == "":
+        return "", "", history
+    if "code box" in user_message.lower():
+        user_message += f"\n\nCode Box:\n```python\n{code_box}\n```"
+    return "", "", history + [[user_message, None]]
+
+import re
+def clean_text(text):
+    text = re.sub(r'\n', ' ', text) # Replaces newlines with spaces
+    text = re.sub(r'\r', '', text) # Removes carriage returns
+    text = re.sub(r'\t', ' ', text) # Replaces tabs with spaces
+    # text = re.sub(r'[^a-zA-Z0-9 ]', '', text) # Removes all non-alphanumeric characters excluding spaces
+    return text
+
+from bs4 import BeautifulSoup
+def clean_html(html_text):
+    soup = BeautifulSoup(html_text, 'html.parser')
+    clean_text = soup.get_text(separator=' ')
+    return clean_text
 
 def tts(history, voice=INTERVIEWER_VOICE):
     text = history[-1][1]
     if text is None:
         return False
-    text = text.replace("\n", " ")
+    text = clean_html(text)
+    text = clean_text(text)
     if text == "":
         return False
+    print(f"\ntts: {text}")
     audio = generate(
         text=text,
         voice=voice,
         model='eleven_monolingual_v1',
-        stream=False,
+        stream=True,
     )
-    play(audio)
-    return True
-    
+    stream(audio)
+    return text
+
+def tts2(text, voice=INTERVIEWER_VOICE):
+    if text is None:
+        return False
+    if text == "RETURN_CODE_BOX_CONTENTS":
+        return False
+    text = clean_text(text)
+    if text == "":
+        return False
+    print(f"\ntts: {text}")
+    audio = generate(
+        text=text,
+        voice=voice,
+        model='eleven_monolingual_v1',
+        stream=True,
+    )
+    stream(audio)
+    return text
+
+def gpt(history: List[List[str]]) -> Iterator[str]:
+    # global messages
+    messages = [{"role": "system", "content": system_prompt}]
+    for user_content, assistant_content in history:
+        messages.append({"role": "user", "content": user_content})
+        if assistant_content is not None:
+            messages.append({"role": "assistant", "content": assistant_content})
+        else:
+            break
+
+    response = openai.ChatCompletion.create(
+        model="gpt-4",
+        messages=messages,
+        stream=True,
+        temperature=0
+    )
+    for chunk in response:
+        response_text = chunk['choices'][0]['delta'].get("content", None)
+        if response_text is not None:
+            print(f"gpt: {response_text}")#, end="")
+            yield response_text
+
+def bot(history):#, code_box):
+    bot_message = gpt(history)
+    # bot_message = random.choice(["How are you?", "Hello! I'm Steve Jobs, and I'll be conducting your technical interview today. We'll be discussing a coding problem to assess your problem-solving skills and technical knowledge. Before we begin, which programming language would you prefer to use for this interview?"])
+    history[-1][1] = ""
+    current_sentence = ""
+    for chunk in bot_message:
+        history[-1][1] += chunk
+        # if "RETURN_CODE_BOX_CONTENTS" in history[-1][1]:
+        #     user_message = history[-1][0] + f"\n\nCode Box:\n```python\n{code_box}\n```"
+        #     history += [[user_message, None]]
+        #     bot(history, code_box)  # re-run the bot
+        #     break  # break the loop
+        yield history, history[-1][1]
+
+    #     current_sentence += chunk
+    #     if chunk[-1] in ["\n", ".", "?", " "]:
+    #         history[-1][1] += current_sentence
+    #         # tts2(current_sentence)
+    #         yield history, history[-1][1]
+    #         current_sentence = ""  # Reset current_sentence after yielding
+
+    # # After all chunks have been processed, if there is a remaining sentence, yield it too
+    # if current_sentence:
+    #     history[-1][1] += current_sentence
+    #     # tts2(current_sentence)
+    #     yield history, history[-1][1]
+
 def chat(history: List[List[str]]):
     global messages
     user_message = history[-1][0]
@@ -147,51 +232,11 @@ def chat(history: List[List[str]]):
     messages.append(response_message)
 
     response_text = response_message["content"]
-    
-    # text to speech request with eleven labs
-    # audio = generate(
-    #     text=response_text.replace("\n", " "),
-    #     voice=INTERVIEWER_VOICE,
-    #     model='eleven_monolingual_v1',
-    #     stream=True,
-    # )
-    # stream(audio)
 
     history[-1][1] = response_text
     return history#, output_filename
-    
-def bot(history):
-    response_text = history[-1][1]
-    history[-1][1] = ""
-    for chunk in response_text:
-        history[-1][1] += chunk
-        # time.sleep(0.05)
-        yield history
 
-# def listen():
-#     import speech_recognition as sr
-#     r = sr.Recognizer()
-#     with sr.Microphone() as source:
-#         print('Calibrating...')
-#         r.adjust_for_ambient_noise(source, duration=5)
-#         # optional parameters to adjust microphone sensitivity
-#         # r.energy_threshold = 200
-#         # r.pause_threshold=0.5    
         
-#         print('Okay, go!')
-#         text = ''
-#         print('listening now...')
-#         try:
-#             audio = r.listen(source, timeout=5, phrase_time_limit=30)
-#             print('Recognizing...')
-#             # whisper model options are found here: https://github.com/openai/whisper#available-models-and-languages
-#             # other speech recognition models are also available.
-#             text = r.recognize_whisper(audio, model='medium.en', show_dict=True, )['text']
-#         except Exception as e:
-#             unrecognized_speech_text = f'Sorry, I didn\'t catch that. Exception was: {e}s'
-#             text = unrecognized_speech_text
-#         print(text)
-#     return text
 #%%
 fn_tests = config.EXAMPLE_TESTS
 fn_soln = config.EXAMPLE_SOLUTION
@@ -234,23 +279,31 @@ css = """
     # border-radius: 5px;
     # background-color: #f5f5f5;
 }
+#image-block iframe {
+    border: none
+}
 """
 # code_default = config.EXAMPLE_SOLUTION
 code_default = config.EXAMPLE_CODE_DEFAULT
 
+def get_code_feedback(code_box):
+    user_message = config.CODE_FEEDBACK_TEMPLATE.format(code_box=code_box)
+    return user_message
+
 with gr.Blocks(theme=theme) as demo:
-    with gr.Row().style(css={'background-color': 'black'}):
+    with gr.Row(scale=1).style(css={'background-color': 'black'}):
         # interviewer image input and microphone input
         interviewer = gr.Image(value=config.INTERVIEWER_IMAGE).style(
             width=config.INTERVIEWER_IMAGE_WIDTH,
             height=config.INTERVIEWER_IMAGE_HEIGHT,
             container=True,
+            # elem_id="image-block"
         )
-    with gr.Row():
+    with gr.Row(scale=2):
         with gr.Column(scale=1):
             with gr.Box():
-                chatbot = gr.Chatbot([], elem_id="chatbot").style(height=250)
-                audio = gr.Audio(source="microphone", type="filepath", streaming=True)
+                chatbot = gr.Chatbot([], elem_id="chatbot").style(height=500)
+                audio = gr.Audio(source="microphone", type="filepath")#, streaming=True)
                 audio_text = gr.Textbox(
                     show_label=False, 
                     placeholder="Click the microphone to start recording",
@@ -262,12 +315,13 @@ with gr.Blocks(theme=theme) as demo:
                 code_box = gr.Textbox(
                     value=code_default,
                     label="Code Box", 
-                    lines=10,
+                    lines=20,
                     elem_id="code-block",
                     interactive=True
                 )
                 run_code_btn = gr.Button("Run Code")
                 submit_code_btn = gr.Button("Submit Code")
+                code_feedback_btn = gr.Button("Code Feedback")
                 code_output = gr.Textbox(
                     value="",
                     label="Code Output",
@@ -275,27 +329,28 @@ with gr.Blocks(theme=theme) as demo:
                     elem_id="code-block",
                     interactive=False
                 )
-    # audio = gr.Audio(source="microphone", type="filepath")#, streaming=True)
-    # audio_text = gr.Textbox(label="Audio Transcript")
-    # record_btn = gr.Button("Record")
-    # record_btn.click(listen, [], [audio_text])
-    # text transcript output and audio 
-    # chatbot = gr.Chatbot([], elem_id="chatbot").style(height=250)
+    current_sentence = gr.State(value="")
     audio_state = gr.State(value="")
-    # audio.change(transcribe, [audio, audio_state], [audio_text, audio_state]).then(
-    #     user, [audio_state, chatbot], [audio_state, chatbot]).then(
-    #     chat, chatbot, chatbot).then(
-    #         tts, chatbot)
-    audio.stream(transcribe, [audio], [audio_text, audio_state])#.then(
-        # user, [audio_text, chatbot], [audio_text, chatbot]).then(
-        # chat, chatbot, chatbot).then(
-        #     tts, chatbot)
-    audio_text.submit(user, [audio_text, chatbot], [audio_text, chatbot]).then(
-        chat, chatbot, chatbot).then(
-            tts, chatbot)
-    submit_msg.click(user, [audio_text, chatbot], [audio_text, chatbot]).then(
-        chat, chatbot, chatbot).then(
-            tts, chatbot)
+    # audio.change(transcribe2, [audio, audio_state], [audio_text, audio_state]).then(
+    #     lambda: None, None, audio).then(
+    #         user, [audio_state, chatbot], [audio_text, audio_state, chatbot]).then(
+    #             bot, chatbot, [chatbot, current_sentence]).then(
+    #                 tts2, current_sentence)
+    (audio.change(transcribe2, [audio, audio_state], [audio_text, audio_state])
+    .then(lambda: None, None, audio)
+    .then(user, [audio_state, code_box, chatbot], [audio_text, audio_state, chatbot])
+    .then(bot, chatbot, [chatbot, current_sentence])  # Ensure bot function outputs current_sentence
+    .then(tts2, current_sentence) # Now current_sentence is an output from bot function
+    )  
+
+    (audio_text.submit(user, [audio_state, code_box, chatbot], [audio_text, audio_state, chatbot])
+     .then(bot, chatbot, chatbot)
+     .then(tts, chatbot)
+     )
+    (submit_msg.click(user, [audio_state, code_box, chatbot], [audio_text, audio_state, chatbot])
+     .then(bot, chatbot, chatbot)
+     .then(tts, chatbot)
+     )
     # btn = gr.Button("Run")
     # btn.click(user, [audio_state, chatbot], [audio_state, chatbot]).then(
     #     chat, chatbot, chatbot)#[chatbot, audio_output])
@@ -303,7 +358,14 @@ with gr.Blocks(theme=theme) as demo:
     clear.click(lambda: [None, code_default, ""], None, [chatbot, code_box, code_output], queue=False)
     run_code_btn.click(run_code, code_box, code_output)
     submit_code_btn.click(run_tests, code_box, code_output)
+    (code_feedback_btn.click(get_code_feedback, code_box, audio_state)
+     .then(user, [audio_state, code_box, chatbot], [audio_text, audio_state, chatbot])
+     .then(bot, chatbot, [chatbot, current_sentence])
+     .then(tts2, current_sentence)
+     )
 
 # if __name__ == "__main__":
 demo.queue()
 demo.launch(debug=False, share=False, server_name="0.0.0.0")
+
+# %%
