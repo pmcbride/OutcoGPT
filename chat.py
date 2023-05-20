@@ -13,6 +13,7 @@ from typing import List, Iterator
 import time
 import sys
 import io
+import multiprocessing
 
 
 import config
@@ -32,7 +33,7 @@ INTERVIEWER_VOICE = elevenlabs.Voice(
 
 template = config.INTERVIEWER_TEMPLATE
 
-system_prompt = template.format(
+SYSTEM_PROMPT = template.format(
     custom_prompt=config.INTERVIEWER_CUSTOM_PROMPT,
     companies=", ".join(config.INTERVIEWER_COMPANIES),
     problem=config.EXAMPLE_PROBLEM
@@ -41,7 +42,7 @@ system_prompt = template.format(
 messages = [
     {
         "role": "system",
-        "content": system_prompt
+        "content": SYSTEM_PROMPT
     }
 ]
 
@@ -165,12 +166,29 @@ def tts2(text, voice=INTERVIEWER_VOICE):
         model='eleven_monolingual_v1',
         stream=True,
     )
-    stream(audio)
+    # stream(audio)
     return text
+
+def tts_audio(text, voice=INTERVIEWER_VOICE):
+    if text is None:
+        return False
+    if text == "RETURN_CODE_BOX_CONTENTS":
+        return False
+    text = clean_text(text)
+    if text == "":
+        return False
+    print(f"\ntts: {text}")
+    audio = generate(
+        text=text,
+        voice=voice,
+        model='eleven_monolingual_v1',
+        stream=True,
+    )
+    return audio
 
 def gpt(history: List[List[str]]) -> Iterator[str]:
     # global messages
-    messages = [{"role": "system", "content": system_prompt}]
+    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
     for user_content, assistant_content in history:
         messages.append({"role": "user", "content": user_content})
         if assistant_content is not None:
@@ -190,6 +208,27 @@ def gpt(history: List[List[str]]) -> Iterator[str]:
             print(f"gpt: {response_text}")#, end="")
             yield response_text
 
+def tts_writer(sentence_queue, audio_queue):
+    while True:
+        sentence = sentence_queue.get()
+        audio = tts_audio(sentence) 
+        audio_queue.put(audio)
+        if sentence_queue is None:  # This is a signal that we're done
+            continue
+
+def tts_playback(audio_queue):
+    while True:
+        audio = audio_queue.get()
+        if audio is None:  # This is a signal that we're done
+            continue
+        stream(audio)  # Implement this function
+
+sentence_queue = multiprocessing.Queue()
+audio_queue = multiprocessing.Queue()
+writer = multiprocessing.Process(target=tts_writer, args=(sentence_queue, audio_queue))
+playback = multiprocessing.Process(target=tts_playback, args=(audio_queue,))
+writer.start()
+playback.start()
 def bot(history):#, code_box):
     bot_message = gpt(history)
     # bot_message = random.choice(["How are you?", "Hello! I'm Steve Jobs, and I'll be conducting your technical interview today. We'll be discussing a coding problem to assess your problem-solving skills and technical knowledge. Before we begin, which programming language would you prefer to use for this interview?"])
@@ -197,25 +236,20 @@ def bot(history):#, code_box):
     current_sentence = ""
     for chunk in bot_message:
         history[-1][1] += chunk
-        # if "RETURN_CODE_BOX_CONTENTS" in history[-1][1]:
-        #     user_message = history[-1][0] + f"\n\nCode Box:\n```python\n{code_box}\n```"
-        #     history += [[user_message, None]]
-        #     bot(history, code_box)  # re-run the bot
-        #     break  # break the loop
         yield history, history[-1][1]
 
-    #     current_sentence += chunk
-    #     if chunk[-1] in ["\n", ".", "?", " "]:
-    #         history[-1][1] += current_sentence
-    #         # tts2(current_sentence)
-    #         yield history, history[-1][1]
-    #         current_sentence = ""  # Reset current_sentence after yielding
+        current_sentence += chunk
+        if chunk[-1] in ["\n", ".", "?", " "]:
+            history[-1][1] += current_sentence
+            sentence_queue.put(current_sentence)
+            yield history, history[-1][1]
+            current_sentence = ""  # Reset current_sentence after yielding
 
-    # # After all chunks have been processed, if there is a remaining sentence, yield it too
-    # if current_sentence:
-    #     history[-1][1] += current_sentence
-    #     # tts2(current_sentence)
-    #     yield history, history[-1][1]
+    # After all chunks have been processed, if there is a remaining sentence, yield it too
+    if current_sentence:
+        history[-1][1] += current_sentence
+        sentence_queue.put(current_sentence)
+        yield history, history[-1][1]
 
 def chat(history: List[List[str]]):
     global messages
@@ -369,3 +403,5 @@ demo.queue()
 demo.launch(debug=False, share=False, server_name="0.0.0.0")
 
 # %%
+writer.join()
+playback.join()
