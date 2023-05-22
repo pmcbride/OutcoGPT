@@ -115,7 +115,7 @@ def transcribe2(audio, state="", timeout=5, model=WHISPER_MODEL):
 def user(user_message, code_box, history):
     if user_message == "":
         return "", "", history
-    if "code box" in user_message.lower():
+    if ("code box" in user_message.lower()) or ("codebox" in user_message.lower()):
         user_message += f"\n\nCode Box:\n```python\n{code_box}\n```"
     return "", "", history + [[user_message, None]]
 
@@ -124,6 +124,10 @@ def clean_text(text):
     text = re.sub(r'\n', ' ', text) # Replaces newlines with spaces
     text = re.sub(r'\r', '', text) # Removes carriage returns
     text = re.sub(r'\t', ' ', text) # Replaces tabs with spaces
+    text = re.sub(r'=', ' equals ', text) # Replaces tabs with spaces
+    text = re.sub(r'\[', ' ', text) # Replaces tabs with spaces
+    text = re.sub(r'\]', ' ', text) # Replaces tabs with spaces
+    text = re.sub(r' -', ' negative ', text) # Replaces tabs with spaces
     # text = re.sub(r'[^a-zA-Z0-9 ]', '', text) # Removes all non-alphanumeric characters excluding spaces
     return text
 
@@ -156,7 +160,7 @@ def tts2(text, voice=INTERVIEWER_VOICE):
         return False
     if text == "RETURN_CODE_BOX_CONTENTS":
         return False
-    text = clean_text(text)
+    text = clean_text(clean_html(text))
     if text == "":
         return False
     print(f"\ntts: {text}")
@@ -164,27 +168,10 @@ def tts2(text, voice=INTERVIEWER_VOICE):
         text=text,
         voice=voice,
         model='eleven_monolingual_v1',
-        stream=True,
+        stream=False,
     )
-    # stream(audio)
+    play(audio)
     return text
-
-def tts_audio(text, voice=INTERVIEWER_VOICE):
-    if text is None:
-        return False
-    if text == "RETURN_CODE_BOX_CONTENTS":
-        return False
-    text = clean_text(text)
-    if text == "":
-        return False
-    print(f"\ntts: {text}")
-    audio = generate(
-        text=text,
-        voice=voice,
-        model='eleven_monolingual_v1',
-        stream=True,
-    )
-    return audio
 
 def gpt(history: List[List[str]]) -> Iterator[str]:
     # global messages
@@ -208,48 +195,68 @@ def gpt(history: List[List[str]]) -> Iterator[str]:
             print(f"gpt: {response_text}")#, end="")
             yield response_text
 
+def tts_audio(text, voice=INTERVIEWER_VOICE):
+    if text is None:
+        return False
+    if text == "RETURN_CODE_BOX_CONTENTS":
+        return False
+    text = clean_text(text)
+    if text == "":
+        return False
+    print(f"\ntts: {text}")
+    audio = generate(
+        text=text,
+        voice=voice,
+        model='eleven_monolingual_v1',
+        stream=False,
+    )
+    return audio
+
+file_idx = 0
 def tts_writer(sentence_queue, audio_queue):
+    global file_idx
     while True:
         sentence = sentence_queue.get()
+        if sentence_queue is None:  # This is a signal that we're done
+            print("Sentence queue is None")
+            continue
+        print(f"\ntts_write: {sentence}")
+        # with open(f"file_{file_idx}.txt", "w") as f:
+        #     f.write(sentence)
+        file_idx += 1
         audio = tts_audio(sentence) 
         audio_queue.put(audio)
-        if sentence_queue is None:  # This is a signal that we're done
-            continue
 
 def tts_playback(audio_queue):
     while True:
         audio = audio_queue.get()
         if audio is None:  # This is a signal that we're done
             continue
-        stream(audio)  # Implement this function
+        play(audio)  # Implement this function
 
-sentence_queue = multiprocessing.Queue()
-audio_queue = multiprocessing.Queue()
-writer = multiprocessing.Process(target=tts_writer, args=(sentence_queue, audio_queue))
-playback = multiprocessing.Process(target=tts_playback, args=(audio_queue,))
-writer.start()
-playback.start()
 def bot(history):#, code_box):
+    global sentence_queue, audio_queue
+    
     bot_message = gpt(history)
-    # bot_message = random.choice(["How are you?", "Hello! I'm Steve Jobs, and I'll be conducting your technical interview today. We'll be discussing a coding problem to assess your problem-solving skills and technical knowledge. Before we begin, which programming language would you prefer to use for this interview?"])
     history[-1][1] = ""
     current_sentence = ""
     for chunk in bot_message:
         history[-1][1] += chunk
-        yield history, history[-1][1]
-
         current_sentence += chunk
-        if chunk[-1] in ["\n", ".", "?", " "]:
-            history[-1][1] += current_sentence
-            sentence_queue.put(current_sentence)
-            yield history, history[-1][1]
-            current_sentence = ""  # Reset current_sentence after yielding
+        sentence_length = len(current_sentence.split(" "))
+        # if chunk in ["\n", ".", "?", "!", ":", ";"]:#, ","]:
+        for char in chunk:
+            if char in ["\n", ".", "?", "!", ":", ";"] or (char == "," and sentence_length > 5):
+                sentence_queue.put(current_sentence)
+                # tts2(current_sentence)
+                current_sentence = ""  # Reset current_sentence after yielding
+                break
+        yield history #, history[-1][1]
 
     # After all chunks have been processed, if there is a remaining sentence, yield it too
-    if current_sentence:
-        history[-1][1] += current_sentence
-        sentence_queue.put(current_sentence)
-        yield history, history[-1][1]
+    # if current_sentence:
+    #     sentence_queue.put(current_sentence)
+    #     yield history, history[-1][1]
 
 def chat(history: List[List[str]]):
     global messages
@@ -365,25 +372,20 @@ with gr.Blocks(theme=theme) as demo:
                 )
     current_sentence = gr.State(value="")
     audio_state = gr.State(value="")
-    # audio.change(transcribe2, [audio, audio_state], [audio_text, audio_state]).then(
-    #     lambda: None, None, audio).then(
-    #         user, [audio_state, chatbot], [audio_text, audio_state, chatbot]).then(
-    #             bot, chatbot, [chatbot, current_sentence]).then(
-    #                 tts2, current_sentence)
     (audio.change(transcribe2, [audio, audio_state], [audio_text, audio_state])
     .then(lambda: None, None, audio)
     .then(user, [audio_state, code_box, chatbot], [audio_text, audio_state, chatbot])
-    .then(bot, chatbot, [chatbot, current_sentence])  # Ensure bot function outputs current_sentence
-    .then(tts2, current_sentence) # Now current_sentence is an output from bot function
+    .then(bot, chatbot, chatbot)  # Ensure bot function outputs current_sentence
+    # .then(tts2, current_sentence) # Now current_sentence is an output from bot function
     )  
 
     (audio_text.submit(user, [audio_state, code_box, chatbot], [audio_text, audio_state, chatbot])
      .then(bot, chatbot, chatbot)
-     .then(tts, chatbot)
+    #  .then(tts, chatbot)
      )
     (submit_msg.click(user, [audio_state, code_box, chatbot], [audio_text, audio_state, chatbot])
      .then(bot, chatbot, chatbot)
-     .then(tts, chatbot)
+    #  .then(tts, chatbot)
      )
     # btn = gr.Button("Run")
     # btn.click(user, [audio_state, chatbot], [audio_state, chatbot]).then(
@@ -394,14 +396,18 @@ with gr.Blocks(theme=theme) as demo:
     submit_code_btn.click(run_tests, code_box, code_output)
     (code_feedback_btn.click(get_code_feedback, code_box, audio_state)
      .then(user, [audio_state, code_box, chatbot], [audio_text, audio_state, chatbot])
-     .then(bot, chatbot, [chatbot, current_sentence])
-     .then(tts2, current_sentence)
+     .then(bot, chatbot, chatbot)
+    #  .then(tts2, current_sentence)
      )
 
-# if __name__ == "__main__":
-demo.queue()
-demo.launch(debug=False, share=False, server_name="0.0.0.0")
-
-# %%
-writer.join()
-playback.join()
+if __name__ == "__main__":
+    sentence_queue = multiprocessing.Queue()
+    audio_queue = multiprocessing.Queue()
+    writer = multiprocessing.Process(target=tts_writer, args=(sentence_queue, audio_queue))
+    playback = multiprocessing.Process(target=tts_playback, args=(audio_queue,))
+    writer.start()
+    playback.start()
+    demo.queue(concurrency_count=16)
+    demo.launch(debug=False, share=False, server_name="0.0.0.0", max_threads=16)
+    writer.join()
+    playback.join()
