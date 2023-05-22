@@ -111,7 +111,7 @@ def transcribe2(audio, state="", timeout=5, model=WHISPER_MODEL):
         state += text + " "
         print(f"State: {state}")
     return state, state
-
+#%%
 def user(user_message, code_box, history):
     if user_message == "":
         return "", "", history
@@ -243,10 +243,10 @@ def bot(history):#, code_box):
     for chunk in bot_message:
         history[-1][1] += chunk
         current_sentence += chunk
-        sentence_length = len(current_sentence.split(" "))
+        sentence_length = len(current_sentence.split(" ")) # Sentence length in words
         # if chunk in ["\n", ".", "?", "!", ":", ";"]:#, ","]:
         for char in chunk:
-            if char in ["\n", ".", "?", "!", ":", ";"] or (char == "," and sentence_length > 5):
+            if char in ["\n", ".", "?", ":", ";"] or (char == "," and sentence_length > 3) or (char == "!" and sentence_length > 1):
                 sentence_queue.put(current_sentence)
                 # tts2(current_sentence)
                 current_sentence = ""  # Reset current_sentence after yielding
@@ -332,7 +332,7 @@ def get_code_feedback(code_box):
     return user_message
 
 with gr.Blocks(theme=theme) as demo:
-    with gr.Row(scale=1).style(css={'background-color': 'black'}):
+    with gr.Row().style(css={'background-color': 'black'}):
         # interviewer image input and microphone input
         interviewer = gr.Image(value=config.INTERVIEWER_IMAGE).style(
             width=config.INTERVIEWER_IMAGE_WIDTH,
@@ -340,7 +340,7 @@ with gr.Blocks(theme=theme) as demo:
             container=True,
             # elem_id="image-block"
         )
-    with gr.Row(scale=2):
+    with gr.Row():
         with gr.Column(scale=1):
             with gr.Box():
                 chatbot = gr.Chatbot([], elem_id="chatbot").style(height=500)
