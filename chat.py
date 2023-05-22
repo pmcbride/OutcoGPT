@@ -94,23 +94,23 @@ def transcribe(audio, state="", timeout=5):
     state += text + " "
     return state, state
 
-import whisper
-WHISPER_MODEL = whisper.load_model("base")
-def transcribe2(audio, state="", timeout=5, model=WHISPER_MODEL):
-    # time.sleep(timeout)
-    # create a recognizer
-    audio = whisper.load_audio(audio)
-    audio = whisper.pad_or_trim(audio)
-    mel = whisper.log_mel_spectrogram(audio).to(model.device)
-    options = whisper.DecodingOptions(language= 'en', fp16=False)
+# import whisper
+# WHISPER_MODEL = whisper.load_model("base")
+# def transcribe2(audio, state="", timeout=5, model=WHISPER_MODEL):
+#     # time.sleep(timeout)
+#     # create a recognizer
+#     audio = whisper.load_audio(audio)
+#     audio = whisper.pad_or_trim(audio)
+#     mel = whisper.log_mel_spectrogram(audio).to(model.device)
+#     options = whisper.DecodingOptions(language= 'en', fp16=False)
 
-    result = whisper.decode(model, mel, options)
-    text = result.text
-    if result.no_speech_prob < 0.5:
-        print(f"Text: {result.text}")
-        state += text + " "
-        print(f"State: {state}")
-    return state, state
+#     result = whisper.decode(model, mel, options)
+#     text = result.text
+#     if result.no_speech_prob < 0.5:
+#         print(f"Text: {result.text}")
+#         state += text + " "
+#         print(f"State: {state}")
+#     return state, state
 
 def user(user_message, code_box, history):
     if user_message == "":
@@ -372,7 +372,7 @@ with gr.Blocks(theme=theme) as demo:
                 )
     current_sentence = gr.State(value="")
     audio_state = gr.State(value="")
-    (audio.change(transcribe2, [audio, audio_state], [audio_text, audio_state])
+    (audio.change(transcribe, [audio, audio_state], [audio_text, audio_state])
     .then(lambda: None, None, audio)
     .then(user, [audio_state, code_box, chatbot], [audio_text, audio_state, chatbot])
     .then(bot, chatbot, chatbot)  # Ensure bot function outputs current_sentence
