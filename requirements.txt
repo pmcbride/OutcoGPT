@@ -12,6 +12,7 @@ SpeechRecognition
 pyaudio
 mpv
 soundfile
+openai-whisper
 
 # Notebook
 jupyter
