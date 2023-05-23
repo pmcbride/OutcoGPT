@@ -150,10 +150,11 @@ def tts(history, voice=INTERVIEWER_VOICE):
         text=text,
         voice=voice,
         model='eleven_monolingual_v1',
-        stream=True,
+        stream=False,
     )
-    stream(audio)
-    return text
+    audio_name = "audio/audio_steve.wav"
+    save(audio, audio_name)
+    return audio_name
 
 def tts2(text, voice=INTERVIEWER_VOICE):
     if text is None:
@@ -351,6 +352,7 @@ with gr.Blocks(theme=theme) as demo:
                     interactive=True
                 ).style(container=False)
                 submit_msg = gr.Button("Submit Message")
+                audio_steve = gr.Audio(label="Steve", type="filepath")
         with gr.Column(scale=1):
             with gr.Box():
                 code_box = gr.Textbox(
@@ -376,6 +378,7 @@ with gr.Blocks(theme=theme) as demo:
     .then(lambda: None, None, audio)
     .then(user, [audio_state, code_box, chatbot], [audio_text, audio_state, chatbot])
     .then(bot, chatbot, chatbot)  # Ensure bot function outputs current_sentence
+    .then(tts, chatbot, audio_steve) # Now current_sentence is an output from bot function
     # .then(tts2, current_sentence) # Now current_sentence is an output from bot function
     )  
 
@@ -389,7 +392,7 @@ with gr.Blocks(theme=theme) as demo:
      )
     # btn = gr.Button("Run")
     # btn.click(user, [audio_state, chatbot], [audio_state, chatbot]).then(
-    #     chat, chatbot, chatbot)#[chatbot, audio_output])
+    #     chat, chatbot, chatbot)#[chatbot, audio_steve])
     clear = gr.Button("Clear")
     clear.click(lambda: [None, code_default, ""], None, [chatbot, code_box, code_output], queue=False)
     run_code_btn.click(run_code, code_box, code_output)
@@ -408,6 +411,6 @@ if __name__ == "__main__":
     writer.start()
     playback.start()
     demo.queue(concurrency_count=16)
-    demo.launch(debug=False, share=False, server_name="0.0.0.0", max_threads=16)
+    demo.launch(debug=False, share=True, server_name="0.0.0.0", max_threads=16)
     writer.join()
     playback.join()
