@@ -137,8 +137,10 @@ def clean_html(html_text):
     clean_text = soup.get_text(separator=' ')
     return clean_text
 
+wav_idx = 0
 def tts(history, voice=INTERVIEWER_VOICE):
-    text = history[-1][1]
+    global wav_idx
+    original_string = text = history[-1][1]
     if text is None:
         return False
     text = clean_html(text)
@@ -152,9 +154,12 @@ def tts(history, voice=INTERVIEWER_VOICE):
         model='eleven_monolingual_v1',
         stream=False,
     )
-    audio_name = "audio/audio_steve.wav"
-    save(audio, audio_name)
-    return audio_name
+    audio_file = f"audio/audio_steve_{wav_idx:06d}.wav"
+    audio_string = f'<audio src="file/{audio_file}" controls autoplay></audio>'
+    save(audio, audio_file)
+    wav_idx += 1
+    history[-1][1] += f"\n\n{audio_string}" #{original_string}"
+    return history, audio_file
 
 def tts2(text, voice=INTERVIEWER_VOICE):
     if text is None:
@@ -378,7 +383,7 @@ with gr.Blocks(theme=theme) as demo:
     .then(lambda: None, None, audio)
     .then(user, [audio_state, code_box, chatbot], [audio_text, audio_state, chatbot])
     .then(bot, chatbot, chatbot)  # Ensure bot function outputs current_sentence
-    .then(tts, chatbot, audio_steve) # Now current_sentence is an output from bot function
+    .then(tts, chatbot, [chatbot, audio_steve]) # Now current_sentence is an output from bot function
     # .then(tts2, current_sentence) # Now current_sentence is an output from bot function
     )  
 
