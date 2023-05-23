@@ -158,8 +158,17 @@ def tts(history, voice=INTERVIEWER_VOICE):
     audio_string = f'<audio src="file/{audio_file}" controls autoplay></audio>'
     save(audio, audio_file)
     wav_idx += 1
-    history[-1][1] += f"\n\n{audio_string}" #{original_string}"
+    history[-1][1] = f"{audio_string}\n\n{original_string}"
     return history, audio_file
+
+def remove_autoplay(history):
+    # Remove autoplay from the last reply
+    new_history = []
+    if len(history) > 0:
+        for user_message, response in history:
+            response = response.replace('controls autoplay>', 'controls>') if not None else response
+            new_history.append([user_message, response])
+    return new_history
 
 def tts2(text, voice=INTERVIEWER_VOICE):
     if text is None:
@@ -241,7 +250,7 @@ def tts_playback(audio_queue):
         play(audio)  # Implement this function
 
 def bot(history):#, code_box):
-    global sentence_queue, audio_queue
+    # global sentence_queue, audio_queue
     
     bot_message = gpt(history)
     history[-1][1] = ""
@@ -253,7 +262,7 @@ def bot(history):#, code_box):
         # if chunk in ["\n", ".", "?", "!", ":", ";"]:#, ","]:
         for char in chunk:
             if char in ["\n", ".", "?", ":", ";"] or (char == "," and sentence_length > 3) or (char == "!" and sentence_length > 1):
-                sentence_queue.put(current_sentence)
+                # sentence_queue.put(current_sentence)
                 # tts2(current_sentence)
                 current_sentence = ""  # Reset current_sentence after yielding
                 break
@@ -381,12 +390,13 @@ with gr.Blocks(theme=theme) as demo:
     audio_state = gr.State(value="")
     (audio.change(transcribe2, [audio, audio_state], [audio_text, audio_state])
     .then(lambda: None, None, audio)
+    .then(remove_autoplay, chatbot, chatbot)
     .then(user, [audio_state, code_box, chatbot], [audio_text, audio_state, chatbot])
     .then(bot, chatbot, chatbot)  # Ensure bot function outputs current_sentence
     .then(tts, chatbot, [chatbot, audio_steve]) # Now current_sentence is an output from bot function
     # .then(tts2, current_sentence) # Now current_sentence is an output from bot function
-    )  
-
+    )
+    # chatbot.change(remove_autoplay, chatbot, chatbot)
     (audio_text.submit(user, [audio_state, code_box, chatbot], [audio_text, audio_state, chatbot])
      .then(bot, chatbot, chatbot)
     #  .then(tts, chatbot)
@@ -409,13 +419,13 @@ with gr.Blocks(theme=theme) as demo:
      )
 
 if __name__ == "__main__":
-    sentence_queue = multiprocessing.Queue()
-    audio_queue = multiprocessing.Queue()
-    writer = multiprocessing.Process(target=tts_writer, args=(sentence_queue, audio_queue))
-    playback = multiprocessing.Process(target=tts_playback, args=(audio_queue,))
-    writer.start()
-    playback.start()
+    # sentence_queue = multiprocessing.Queue()
+    # audio_queue = multiprocessing.Queue()
+    # writer = multiprocessing.Process(target=tts_writer, args=(sentence_queue, audio_queue))
+    # playback = multiprocessing.Process(target=tts_playback, args=(audio_queue,))
+    # writer.start()
+    # playback.start()
     demo.queue(concurrency_count=16)
     demo.launch(debug=False, share=True, server_name="0.0.0.0", max_threads=16)
-    writer.join()
-    playback.join()
+    # writer.join()
+    # playback.join()
